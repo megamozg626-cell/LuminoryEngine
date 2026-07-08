@@ -1,61 +1,27 @@
 #pragma once
 
 #include <cmath>
-#include <algorithm>
+#include "Math.hpp"
 
 namespace Luminary {
 
-struct Vector2 {
-    float x = 0.0f;
-    float y = 0.0f;
+class Vector2 {
+public:
+    float x, y;
 
-    Vector2() = default;
+    Vector2() : x(0.0f), y(0.0f) {}
     Vector2(float x, float y) : x(x), y(y) {}
 
-    // Operators
-    Vector2 operator+(const Vector2& v) const {
-        return Vector2(x + v.x, y + v.y);
+    Vector2 operator+(const Vector2& other) const {
+        return Vector2(x + other.x, y + other.y);
     }
 
-    Vector2 operator-(const Vector2& v) const {
-        return Vector2(x - v.x, y - v.y);
+    Vector2 operator-(const Vector2& other) const {
+        return Vector2(x - other.x, y - other.y);
     }
 
     Vector2 operator*(float scalar) const {
         return Vector2(x * scalar, y * scalar);
-    }
-
-    Vector2 operator/(float scalar) const {
-        if (scalar != 0.0f) {
-            return Vector2(x / scalar, y / scalar);
-        }
-        return Vector2();
-    }
-
-    Vector2& operator+=(const Vector2& v) {
-        x += v.x;
-        y += v.y;
-        return *this;
-    }
-
-    Vector2& operator-=(const Vector2& v) {
-        x -= v.x;
-        y -= v.y;
-        return *this;
-    }
-
-    Vector2& operator*=(float scalar) {
-        x *= scalar;
-        y *= scalar;
-        return *this;
-    }
-
-    float Dot(const Vector2& v) const {
-        return x * v.x + y * v.y;
-    }
-
-    float Cross(const Vector2& v) const {
-        return x * v.y - y * v.x;
     }
 
     float Length() const {
@@ -71,11 +37,18 @@ struct Vector2 {
         if (len > 0.0f) {
             return Vector2(x / len, y / len);
         }
-        return Vector2();
+        return Vector2(0.0f, 0.0f);
     }
 
-    Vector2 Reflect(const Vector2& normal) const {
-        return *this - normal * (2.0f * Dot(normal));
+    float Dot(const Vector2& other) const {
+        return x * other.x + y * other.y;
+    }
+
+    Vector2 Lerp(const Vector2& other, float t) const {
+        return Vector2(
+            Math::Lerp(x, other.x, t),
+            Math::Lerp(y, other.y, t)
+        );
     }
 
     static Vector2 Zero() { return Vector2(0.0f, 0.0f); }

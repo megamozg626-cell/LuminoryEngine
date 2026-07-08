@@ -1,107 +1,61 @@
 #pragma once
 
-#include <string>
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <chrono>
-#include <iomanip>
+#include <memory>
+#include <mutex>
 
 namespace Luminary {
 
-enum class LogLevel {
-    Trace,
-    Debug,
-    Info,
-    Warning,
-    Error,
-    Critical
-};
-
 class Logger {
 public:
-    static Logger& GetInstance() {
-        static Logger instance;
-        return instance;
-    }
+    enum class LogLevel {
+        Debug,
+        Info,
+        Warning,
+        Error,
+        Critical
+    };
 
-    void Initialize(const std::string& logFile = "luminary.log") {
-        m_LogFile.open(logFile, std::ios::app);
-        m_LogLevel = LogLevel::Debug;
-    }
-
-    void Shutdown() {
-        if (m_LogFile.is_open()) {
-            m_LogFile.close();
-        }
-    }
-
-    void SetLogLevel(LogLevel level) {
-        m_LogLevel = level;
-    }
+    static void Initialize(const std::string& filename = "engine.log");
+    static void Shutdown();
 
     template<typename... Args>
-    void Log(LogLevel level, const std::string& message, Args... args) {
-        if (level < m_LogLevel) return;
-
-        std::string formattedMessage = FormatMessage(message, args...);
-        std::string logEntry = FormatLogEntry(level, formattedMessage);
-
-        std::cout << logEntry << std::endl;
-
-        if (m_LogFile.is_open()) {
-            m_LogFile << logEntry << std::endl;
-            m_LogFile.flush();
-        }
+    static void Log(LogLevel level, const std::string& format, Args&&... args) {
+        if (!s_Instance) return;
+        s_Instance->LogInternal(level, format, std::forward<Args>(args)...);
     }
+
+    static void SetConsoleOutput(bool enabled) { s_ConsoleOutput = enabled; }
+    static void SetFileOutput(bool enabled) { s_FileOutput = enabled; }
+    static void SetMinLogLevel(LogLevel level) { s_MinLogLevel = level; }
 
 private:
-    Logger() = default;
-    ~Logger() { Shutdown(); }
+    static std::unique_ptr<Logger> s_Instance;
+    static std::mutex s_Mutex;
+    static bool s_ConsoleOutput;
+    static bool s_FileOutput;
+    static LogLevel s_MinLogLevel;
 
-    LogLevel m_LogLevel = LogLevel::Debug;
-    std::ofstream m_LogFile;
+    std::string m_Filename;
+    std::ofstream m_FileStream;
 
-    template<typename... Args>
-    std::string FormatMessage(const std::string& message, Args... args) {
-        // Simple formatting - can be enhanced with proper format library
-        return message;
-    }
+    Logger(const std::string& filename);
+    ~Logger();
 
-    std::string FormatLogEntry(LogLevel level, const std::string& message) {
-        auto now = std::chrono::system_clock::now();
-        auto time = std::chrono::system_clock::to_time_t(now);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now.time_since_epoch()) % 1000;
+    void LogInternal(LogLevel level, const std::string& message);
 
-        std::stringstream ss;
-        ss << "[" << std::put_time(std::localtime(&time), "%H:%M:%S")
-           << "." << std::setfill('0') << std::setw(3) << ms.count() << "] "
-           << "[" << GetLevelString(level) << "] "
-           << message;
-
-        return ss.str();
-    }
-
-    std::string GetLevelString(LogLevel level) const {
-        switch (level) {
-            case LogLevel::Trace:    return "TRACE";
-            case LogLevel::Debug:    return "DEBUG";
-            case LogLevel::Info:     return "INFO";
-            case LogLevel::Warning:  return "WARN";
-            case LogLevel::Error:    return "ERROR";
-            case LogLevel::Critical: return "CRITICAL";
-            default:                 return "UNKNOWN";
-        }
-    }
+    std::string GetLevelString(LogLevel level) const;
+    std::string GetTimestamp() const;
 };
 
 } // namespace Luminary
 
-// Convenience macros
-#define LOG_TRACE(msg, ...) Luminary::Logger::GetInstance().Log(Luminary::LogLevel::Trace, msg, ##__VA_ARGS__)
-#define LOG_DEBUG(msg, ...) Luminary::Logger::GetInstance().Log(Luminary::LogLevel::Debug, msg, ##__VA_ARGS__)
-#define LOG_INFO(msg, ...) Luminary::Logger::GetInstance().Log(Luminary::LogLevel::Info, msg, ##__VA_ARGS__)
-#define LOG_WARNING(msg, ...) Luminary::Logger::GetInstance().Log(Luminary::LogLevel::Warning, msg, ##__VA_ARGS__)
-#define LOG_ERROR(msg, ...) Luminary::Logger::GetInstance().Log(Luminary::LogLevel::Error, msg, ##__VA_ARGS__)
-#define LOG_CRITICAL(msg, ...) Luminary::Logger::GetInstance().Log(Luminary::LogLevel::Critical, msg, ##__VA_ARGS__)
+// Convenient logging macros
+#define LOG_DEBUG(fmt, ...) Luminary::Logger::Log(Luminary::Logger::LogLevel::Debug, fmt, ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...) Luminary::Logger::Log(Luminary::Logger::LogLevel::Info, fmt, ##__VA_ARGS__)
+#define LOG_WARNING(fmt, ...) Luminary::Logger::Log(Luminary::Logger::LogLevel::Warning, fmt, ##__VA_ARGS__)
+#define LOG_ERROR(fmt, ...) Luminary::Logger::Log(Luminary::Logger::LogLevel::Error, fmt, ##__VA_ARGS__)
+#define LOG_CRITICAL(fmt, ...) Luminary::Logger::Log(Luminary::Logger::LogLevel::Critical, fmt, ##__VA_ARGS__)

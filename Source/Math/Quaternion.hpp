@@ -1,37 +1,42 @@
 #pragma once
 
 #include "Vector3.hpp"
-#include "Vector4.hpp"
 #include <cmath>
 
 namespace Luminary {
 
-struct Quaternion {
-    float x = 0.0f;
-    float y = 0.0f;
-    float z = 0.0f;
-    float w = 1.0f;
+class Quaternion {
+public:
+    float x, y, z, w;
 
-    Quaternion() = default;
+    Quaternion() : x(0.0f), y(0.0f), z(0.0f), w(1.0f) {}
     Quaternion(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
+
+    Quaternion operator*(const Quaternion& other) const {
+        return Quaternion(
+            w * other.x + x * other.w + y * other.z - z * other.y,
+            w * other.y - x * other.z + y * other.w + z * other.x,
+            w * other.z + x * other.y - y * other.x + z * other.w,
+            w * other.w - x * other.x - y * other.y - z * other.z
+        );
+    }
+
+    Vector3 operator*(const Vector3& v) const {
+        Vector3 u(x, y, z);
+        Vector3 uv = u.Cross(v);
+        Vector3 uuv = u.Cross(uv);
+        return v + (uv * (2.0f * w)) + (uuv * 2.0f);
+    }
+
+    Quaternion Conjugate() const {
+        return Quaternion(-x, -y, -z, w);
+    }
 
     static Quaternion Identity() {
         return Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
     }
 
-    static Quaternion FromAxisAngle(const Vector3& axis, float angle) {
-        float halfAngle = angle * 0.5f;
-        float sinHalf = std::sin(halfAngle);
-        Vector3 normalizedAxis = axis.Normalize();
-        return Quaternion(
-            normalizedAxis.x * sinHalf,
-            normalizedAxis.y * sinHalf,
-            normalizedAxis.z * sinHalf,
-            std::cos(halfAngle)
-        );
-    }
-
-    static Quaternion FromEulerAngles(float roll, float pitch, float yaw) {
+    static Quaternion FromEulerAngles(float pitch, float yaw, float roll) {
         float cy = std::cos(yaw * 0.5f);
         float sy = std::sin(yaw * 0.5f);
         float cp = std::cos(pitch * 0.5f);
@@ -47,23 +52,33 @@ struct Quaternion {
         );
     }
 
-    Quaternion operator*(const Quaternion& q) const {
-        return Quaternion(
-            w * q.x + x * q.w + y * q.z - z * q.y,
-            w * q.y - x * q.z + y * q.w + z * q.x,
-            w * q.z + x * q.y - y * q.x + z * q.w,
-            w * q.w - x * q.x - y * q.y - z * q.z
-        );
-    }
+    static Quaternion Slerp(const Quaternion& a, const Quaternion& b, float t) {
+        Quaternion result;
+        float dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+        Quaternion bb = b;
 
-    Vector3 operator*(const Vector3& v) const {
-        Vector3 u(x, y, z);
-        Vector3 result = u * (2.0f * u.Dot(v)) + v * (w * w - u.Dot(u)) + u.Cross(v) * (2.0f * w);
-        return result;
-    }
+        if (dot < 0.0f) {
+            dot = -dot;
+            bb.x = -bb.x;
+            bb.y = -bb.y;
+            bb.z = -bb.z;
+            bb.w = -bb.w;
+        }
 
-    Quaternion Conjugate() const {
-        return Quaternion(-x, -y, -z, w);
+        if (dot < 0.9995f) {
+            float theta_0 = std::acos(dot);
+            float theta = theta_0 * t;
+            Quaternion q2 = (bb - (a * dot)).Normalize();
+            result = (a * std::cos(theta)) + (q2 * std::sin(theta));
+        } else {
+            result = Quaternion(
+                Math::Lerp(a.x, bb.x, t),
+                Math::Lerp(a.y, bb.y, t),
+                Math::Lerp(a.z, bb.z, t),
+                Math::Lerp(a.w, bb.w, t)
+            );
+        }
+        return result.Normalize();
     }
 
     float Length() const {
@@ -75,41 +90,7 @@ struct Quaternion {
         if (len > 0.0f) {
             return Quaternion(x / len, y / len, z / len, w / len);
         }
-        return Identity();
-    }
-
-    static Quaternion Slerp(const Quaternion& a, const Quaternion& b, float t) {
-        Quaternion q1 = a.Normalize();
-        Quaternion q2 = b.Normalize();
-
-        float dotProduct = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
-        if (dotProduct < 0.0f) {
-            q2 = Quaternion(-q2.x, -q2.y, -q2.z, -q2.w);
-            dotProduct = -dotProduct;
-        }
-
-        dotProduct = std::clamp(dotProduct, -1.0f, 1.0f);
-        float theta = std::acos(dotProduct);
-        float sinTheta = std::sin(theta);
-
-        if (sinTheta < 0.001f) {
-            return Quaternion(
-                q1.x + t * (q2.x - q1.x),
-                q1.y + t * (q2.y - q1.y),
-                q1.z + t * (q2.z - q1.z),
-                q1.w + t * (q2.w - q1.w)
-            ).Normalize();
-        }
-
-        float w1 = std::sin((1.0f - t) * theta) / sinTheta;
-        float w2 = std::sin(t * theta) / sinTheta;
-
-        return Quaternion(
-            w1 * q1.x + w2 * q2.x,
-            w1 * q1.y + w2 * q2.y,
-            w1 * q1.z + w2 * q2.z,
-            w1 * q1.w + w2 * q2.w
-        );
+        return Quaternion(0.0f, 0.0f, 0.0f, 1.0f);
     }
 };
 
